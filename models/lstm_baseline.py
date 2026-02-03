@@ -6,7 +6,7 @@ import torch.nn as nn
 
 class LSTMSeq2Seq(nn.Module):
     """
-    LSTM encoder-decoder for forecasting.
+    Baseline LSTM model for multivariate time series forecasting.
     """
 
     def __init__(self, input_dim, hidden_dim, num_layers):

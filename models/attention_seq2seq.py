@@ -6,7 +6,8 @@ import torch.nn as nn
 
 class AttentionSeq2Seq(nn.Module):
     """
-    Encoder-Decoder with self-attention.
+    Sequence-to-sequence LSTM model with attention mechanism
+    for long-term multivariate time series forecasting.
     """
 
     def __init__(self, input_dim, hidden_dim, num_layers, num_heads):

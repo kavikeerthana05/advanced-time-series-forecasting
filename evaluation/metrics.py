@@ -2,10 +2,14 @@
 Evaluation metrics for forecasting.
 """
 
-import numpy as np
+"""
+Evaluation metrics for multivariate time series forecasting models.
+"""
 
-def mae(y_true, y_pred):
-    return np.mean(np.abs(y_true - y_pred))
+import torch
 
-def rmse(y_true, y_pred):
-    return np.sqrt(np.mean((y_true - y_pred) ** 2))
+def mae(preds, targets):
+    return torch.mean(torch.abs(preds - targets)).item()
+
+def rmse(preds, targets):
+    return torch.sqrt(torch.mean((preds - targets) ** 2)).item()
