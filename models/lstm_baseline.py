@@ -15,7 +15,7 @@ class LSTMSeq2Seq(nn.Module):
         self.decoder = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_dim, input_dim)
 
-    def forward(self, x, horizon):
+    def forward(self, x, horizon=10):
         _, (h, c) = self.encoder(x)
         decoder_input = x[:, -1:, :]
         outputs = []

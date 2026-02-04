@@ -11,6 +11,10 @@ The goal is to evaluate how attention mechanisms improve long-term dependency
 modeling compared to a standard LSTM baseline.
 
 ---
+Note: Model interpretability is achieved via attention weight visualization,
+which highlights influential timesteps during prediction. SHAP was not applied
+as the task focuses on sequence-based interpretability rather than feature attribution.
+
 
 ## Project Structure
 

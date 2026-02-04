@@ -25,7 +25,7 @@ class AttentionSeq2Seq(nn.Module):
         self.decoder = nn.LSTM(hidden_dim, hidden_dim, num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_dim, input_dim)
 
-    def forward(self, x, horizon):
+    def forward(self, x, horizon=10):
         enc_out, _ = self.encoder(x)
         attn_out, attn_weights = self.attention(enc_out, enc_out, enc_out)
 

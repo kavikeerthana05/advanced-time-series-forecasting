@@ -1,128 +1,51 @@
 """
-Main execution script.
-"""
-"""
-Main entry point for Time Series Forecasting using
-LSTM Baseline and Attention-based Seq2Seq model.
-"""
-"""
-Main pipeline for training, evaluating, and comparing
-LSTM and Attention-based Seq2Seq models for
-multivariate time series forecasting.
+Main execution file for training and evaluating time-series models.
 """
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 
-from models.lstm_baseline import LSTMSeq2Seq
-from models.attention_seq2seq import AttentionSeq2Seq
-from training.train import train_model
-from evaluation.metrics import mae,rmse
-from evaluation.evaluate import evaluate_model
-from visualization.attention_visualization import plot_attention_weights
 from data.generate_data import generate_synthetic_series
 from data.dataset import TimeSeriesDataset
+from models.lstm_baseline import LSTMBaseline
+from models.attention_seq2seq import AttentionSeq2Seq
+from training.training import train_model
+from evaluation.evaluate import evaluate_model
+from visualization.attention_visualization import plot_attention
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 1. Generate data
 series = generate_synthetic_series()
 
-dataset = TimeSeriesDataset(
-    series,
-    input_window=30,
-    forecast_horizon=10
-)
+dataset = TimeSeriesDataset(series, input_window=30, forecast_horizon=10)
 
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+train_size = int(0.7 * len(dataset))
+val_size = int(0.15 * len(dataset))
+test_size = len(dataset) - train_size - val_size
 
+train_ds, val_ds, test_ds = random_split(dataset, [train_size, val_size, test_size])
 
-# -------------------- CONFIGURATION --------------------
+train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_ds, batch_size=32)
+test_loader = DataLoader(test_ds, batch_size=32)
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# 2. Models
+lstm_model = LSTMBaseline(1, 64, 1).to(device)
+attention_model = AttentionSeq2Seq(1, 64, 1).to(device)
 
-BATCH_SIZE = 32
-EPOCHS = 10
-LEARNING_RATE = 0.001
-HORIZON = 10
+criterion = torch.nn.MSELoss()
 
-INPUT_SIZE = 5      # number of features
-HIDDEN_SIZE = 64
-NUM_LAYERS = 2
+# 3. Train
+train_model(lstm_model, train_loader, val_loader, criterion, device)
+train_model(attention_model, train_loader, val_loader, criterion, device)
 
+# 4. Evaluate
+lstm_metrics = evaluate_model(lstm_model, test_loader, device, horizon=10)
+attention_metrics = evaluate_model(attention_model, test_loader, device, horizon=10)
 
-# -------------------- DATA LOADING --------------------
-train_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
-val_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
-test_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+print("LSTM:", lstm_metrics)
+print("Attention:", attention_metrics)
 
-# -------------------- BASELINE LSTM --------------------
-
-lstm_model = LSTMSeq2Seq(
-    input_size=INPUT_SIZE,
-    hidden_size=HIDDEN_SIZE,
-    num_layers=NUM_LAYERS
-).to(DEVICE)
-
-print("\nTraining LSTM Baseline...")
-train_model(
-    model=lstm_model,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    device=DEVICE,
-    epochs=EPOCHS,
-    lr=LEARNING_RATE,
-    horizon=HORIZON
-)
-
-
-# -------------------- ATTENTION MODEL --------------------
-
-attn_model = AttentionSeq2Seq(
-    input_size=INPUT_SIZE,
-    hidden_size=HIDDEN_SIZE,
-    num_layers=NUM_LAYERS
-).to(DEVICE)
-
-print("\nTraining Attention-based Seq2Seq...")
-train_model(
-    model=attn_model,
-    train_loader=train_loader,
-    val_loader=val_loader,
-    device=DEVICE,
-    epochs=EPOCHS,
-    lr=LEARNING_RATE,
-    horizon=HORIZON
-)
-
-
-# -------------------- PHASE 5: MODEL EVALUATION --------------------
-
-lstm_metrics = evaluate_model(...)
-attn_metrics = evaluate_model(...)(
-    model=lstm_model,
-    dataloader=test_loader,
-    device=DEVICE,
-    horizon=HORIZON
-)
-
-attn_mae, attn_rmse = evaluate_model(
-    model=attn_model,
-    dataloader=test_loader,
-    device=DEVICE,
-    horizon=HORIZON
-)
-
-print("\nMODEL COMPARISON RESULTS")
-print(f"LSTM Baseline   → MAE: {lstm_metrics['MAE']:.4f}, RMSE: {lstm_metrics['RMSE']:.4f}")
-print(f"Attention Model → MAE: {attn_metrics['MAE']:.4f}, RMSE: {attn_metrics['RMSE']:.4f}")
-
-
-# -------------------- PHASE 4: ATTENTION VISUALIZATION --------------------
-
-x_sample, _ = next(iter(test_loader))
-x_sample = x_sample.to(DEVICE)
-
-_, attention_weights = attn_model(x_sample[:1], horizon=HORIZON)
-
-plot_attention_weights(attention_weights)
-
-
-print("\nPipeline execution completed successfully.")
-
+# 5. Attention visualization
+plot_attention(attention_model, test_loader, device)
