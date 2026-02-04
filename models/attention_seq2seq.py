@@ -10,7 +10,10 @@ class AttentionSeq2Seq(nn.Module):
     for long-term multivariate time series forecasting.
     """
 
-    def __init__(self, input_dim, hidden_dim, num_layers, num_heads):
+    def __init__(self, input_dim, 
+                 hidden_dim, 
+                 num_layers = 1, 
+                 num_heads = 1):
         super().__init__()
 
         self.encoder = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)

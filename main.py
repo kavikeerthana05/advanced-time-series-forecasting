@@ -21,7 +21,7 @@ from evaluation.metrics import mae,rmse
 from evaluation.evaluate import evaluate_model
 from visualization.attention_visualization import plot_attention_weights
 from data.generate_data import generate_synthetic_series
-from datasets.dataset import TimeSeriesDataset
+from data.dataset import TimeSeriesDataset
 series = generate_synthetic_series()
 
 dataset = TimeSeriesDataset(
@@ -48,15 +48,9 @@ NUM_LAYERS = 2
 
 
 # -------------------- DATA LOADING --------------------
-
-train_dataset = TimeSeriesDataset(split="train")
-val_dataset = TimeSeriesDataset(split="val")
-test_dataset = TimeSeriesDataset(split="test")
-
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
-
+train_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+val_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+test_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 # -------------------- BASELINE LSTM --------------------
 
@@ -100,7 +94,8 @@ train_model(
 
 # -------------------- PHASE 5: MODEL EVALUATION --------------------
 
-lstm_mae, lstm_rmse = evaluate_model(
+lstm_metrics = evaluate_model(...)
+attn_metrics = evaluate_model(...)(
     model=lstm_model,
     dataloader=test_loader,
     device=DEVICE,
@@ -115,8 +110,8 @@ attn_mae, attn_rmse = evaluate_model(
 )
 
 print("\nMODEL COMPARISON RESULTS")
-print(f"LSTM Baseline   → MAE: {lstm_mae:.4f}, RMSE: {lstm_rmse:.4f}")
-print(f"Attention Model → MAE: {attn_mae:.4f}, RMSE: {attn_rmse:.4f}")
+print(f"LSTM Baseline   → MAE: {lstm_metrics['MAE']:.4f}, RMSE: {lstm_metrics['RMSE']:.4f}")
+print(f"Attention Model → MAE: {attn_metrics['MAE']:.4f}, RMSE: {attn_metrics['RMSE']:.4f}")
 
 
 # -------------------- PHASE 4: ATTENTION VISUALIZATION --------------------
