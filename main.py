@@ -20,7 +20,17 @@ from training.train import train_model
 from evaluation.metrics import mae,rmse
 from evaluation.evaluate import evaluate_model
 from visualization.attention_visualization import plot_attention_weights
+from data.generate_data import generate_synthetic_series
 from datasets.dataset import TimeSeriesDataset
+series = generate_synthetic_series()
+
+dataset = TimeSeriesDataset(
+    series,
+    input_window=30,
+    forecast_horizon=10
+)
+
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 
 # -------------------- CONFIGURATION --------------------
