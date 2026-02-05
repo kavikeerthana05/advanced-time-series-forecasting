@@ -3,49 +3,61 @@ Main execution file for training and evaluating time-series models.
 """
 
 import torch
+import numpy as np
 from torch.utils.data import DataLoader, random_split
-
-from data.generate_data import generate_synthetic_series
 from data.dataset import TimeSeriesDataset
-from models.lstm_baseline import LSTMBaseline
 from models.attention_seq2seq import AttentionSeq2Seq
-from training.training import train_model
-from evaluation.evaluate import evaluate_model
-from visualization.attention_visualization import plot_attention
+from models.lstm_baseline import LSTMBaseline
+from training.train import train_one_epoch, validate
+from evaluation.metrics import calculate_metrics
+import os
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Config
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+BATCH_SIZE = 64
+EPOCHS = 30
+SEQ_LEN = 50
 
-# 1. Generate data
-series = generate_synthetic_series()
+def run_experiment(model_type='attention'):
+    dataset = TimeSeriesDataset('data/multivariate_data.csv', seq_length=SEQ_LEN)
+    train_size = int(0.8 * len(dataset))
+    test_size = len(dataset) - train_size
+    train_ds, test_ds = random_split(dataset, [train_size, test_size])
+    
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE)
 
-dataset = TimeSeriesDataset(series, input_window=30, forecast_horizon=10)
+    if model_type == 'attention':
+        model = AttentionSeq2Seq(3, 64).to(DEVICE)
+    else:
+        model = LSTMBaseline(3, 64).to(DEVICE)
 
-train_size = int(0.7 * len(dataset))
-val_size = int(0.15 * len(dataset))
-test_size = len(dataset) - train_size - val_size
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    criterion = torch.nn.MSELoss()
 
-train_ds, val_ds, test_ds = random_split(dataset, [train_size, val_size, test_size])
+    print(f"--- Training {model_type} ---")
+    for epoch in range(EPOCHS):
+        t_loss = train_one_epoch(model, train_loader, optimizer, criterion, DEVICE)
+        v_loss = validate(model, test_loader, criterion, DEVICE)
+        if epoch % 5 == 0:
+            print(f"Epoch {epoch} | Val Loss: {v_loss:.4f}")
 
-train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
-val_loader = DataLoader(val_ds, batch_size=32)
-test_loader = DataLoader(test_ds, batch_size=32)
+    # Final Eval
+    model.eval()
+    preds, actuals = [], []
+    with torch.no_grad():
+        for x, y in test_loader:
+            out, _ = model(x.to(DEVICE))
+            preds.extend(out.squeeze().cpu().numpy())
+            actuals.extend(y.numpy())
+    
+    metrics = calculate_metrics(np.array(actuals), np.array(preds))
+    print(f"Results for {model_type}: {metrics}")
 
-# 2. Models
-lstm_model = LSTMBaseline(1, 64, 1).to(device)
-attention_model = AttentionSeq2Seq(1, 64, 1).to(device)
-
-criterion = torch.nn.MSELoss()
-
-# 3. Train
-train_model(lstm_model, train_loader, val_loader, criterion, device)
-train_model(attention_model, train_loader, val_loader, criterion, device)
-
-# 4. Evaluate
-lstm_metrics = evaluate_model(lstm_model, test_loader, device, horizon=10)
-attention_metrics = evaluate_model(attention_model, test_loader, device, horizon=10)
-
-print("LSTM:", lstm_metrics)
-print("Attention:", attention_metrics)
-
-# 5. Attention visualization
-plot_attention(attention_model, test_loader, device)
+if __name__ == "__main__":
+    if not os.path.exists('data/multivariate_data.csv'):
+        import data.generate_data as gd
+        gd.generate_multivariate_series()
+    
+    run_experiment('baseline')
+    run_experiment('attention')
