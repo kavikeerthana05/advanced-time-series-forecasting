@@ -1,62 +1,62 @@
 import torch
 import numpy as np
 import pandas as pd
-import optuna
-from captum.attr import IntegratedGradients
+from torch.utils.data import DataLoader, random_split
 from data.dataset import TimeSeriesDataset
 from models.attention_seq2seq import AttentionSeq2Seq
-from models.lstm_baseline import LSTMBaseline
-from training.train import train_one_epoch, validate, objective
+from training.train import train_one_epoch
 from evaluation.metrics import calculate_metrics
-from statsmodels.tsa.statespace.sarimax import SARIMAX
+import data.generate_data as gd
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def run_sarima_baseline():
-    print("\n--- Running SARIMA Baseline ---")
-    df = pd.read_csv('data/multivariate_data.csv')
-    train_data = df['target'].values[:800]
-    test_data = df['target'].values[800:1000]
+def run_final_experiment():
+    gd.generate_multivariate_series()
+    dataset = TimeSeriesDataset('data/multivariate_data.csv')
     
-    model = SARIMAX(train_data, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
-    res = model.fit(disp=False)
-    preds = res.forecast(steps=len(test_data))
+    train_size = int(0.8 * len(dataset))
+    train_ds, test_ds = random_split(dataset, [train_size, len(dataset) - train_size])
     
-    metrics = calculate_metrics(test_data, preds)
-    print(f"SARIMA Results: {metrics}")
+    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
+    test_loader = DataLoader(test_ds, batch_size=64)
 
-def explain_model(model, test_loader):
-    print("\n--- Generating Explainability Analysis (Task 4) ---")
-    ig = IntegratedGradients(model)
-    x, _ = next(iter(test_loader))
-    x = x[:1].to(DEVICE).requires_grad_()
+    # Input_dim is now 6 (target + 5 features)
+    model = AttentionSeq2Seq(input_dim=6, hidden_dim=64).to(DEVICE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    print("--- Training Final Model with Quantile Regression ---")
+    for epoch in range(20):
+        loss = train_one_epoch(model, train_loader, optimizer, DEVICE)
+        if epoch % 5 == 0: print(f"Epoch {epoch} Loss: {loss:.4f}")
+
+    # Evaluation
+    model.eval()
+    all_preds, all_actuals = [], []
+    with torch.no_grad():
+        for x, y in test_loader:
+            out, _ = model(x.to(DEVICE))
+            all_preds.append(out.cpu().numpy())
+            all_actuals.append(y.numpy())
+
+    preds = np.concatenate(all_preds)
+    actuals = np.concatenate(all_actuals)
     
-    attributions = ig.attribute(x, target=0)
-    importance = attributions.abs().mean(dim=1).squeeze().detach().cpu().numpy()
-    print(f"Feature Importance (Integrated Gradients) for first sample: {importance}")
+    # Use index 1 (0.5 quantile) for point forecast metrics (MAE/RMSE)
+    metrics = calculate_metrics(actuals, preds[:, 1], y_train=actuals, quantiles=preds)
+    print("\n--- Final Performance Summary Table ---")
+    print(pd.DataFrame([metrics]).to_markdown())
+# ... (rest of your main.py code remains the same)
+
+    # Use index 1 (0.5 quantile) for point forecast metrics (MAE/RMSE)
+    metrics = calculate_metrics(actuals, preds[:, 1], y_train=actuals, quantiles=preds)
+    
+    print("\n--- Final Performance Summary Table ---")
+    try:
+        # Attempt to print as a nice markdown table
+        print(pd.DataFrame([metrics]).to_markdown(index=False))
+    except ImportError:
+        # Fallback to standard print if tabulate is missing
+        print(pd.DataFrame([metrics]).to_string(index=False))
 
 if __name__ == "__main__":
-    # 1. Generate Data
-    import data.generate_data as gd
-    gd.generate_multivariate_series()
-    
-    # 2. SARIMA Baseline (Deliverable 2 Requirement)
-    run_sarima_baseline()
-    
-    # 3. Hyperparameter Tuning (Task 3)
-    dataset = TimeSeriesDataset('data/multivariate_data.csv')
-    train_ds, test_ds = torch.utils.data.random_split(dataset, [int(0.8*len(dataset)), len(dataset)-int(0.8*len(dataset))])
-    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=64, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_ds, batch_size=64)
-
-    study = optuna.create_study(direction="minimize")
-    study.optimize(lambda trial: objective(trial, train_loader, test_loader, DEVICE, 3), n_trials=5)
-    
-    print(f"Best Hyperparameters: {study.best_params}")
-    
-    # 4. Final Train with Best Params
-    best_model = AttentionSeq2Seq(3, study.best_params['hidden_dim']).to(DEVICE)
-    # ... (Run standard training loop here) ...
-    
-    # 5. Explainability
-    explain_model(best_model, test_loader)
+    run_final_experiment()

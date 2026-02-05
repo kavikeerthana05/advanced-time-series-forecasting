@@ -8,13 +8,17 @@ def generate_multivariate_series(n_steps=10000):
     
     # Target: Seasonality + Trend + Sine Waves
     target = np.sin(time) + 0.5 * np.cos(time * 0.5) + 0.01 * time + np.random.normal(0, 0.05, n_steps)
-    # Exogenous features that correlate with target
+    
+    # 5 Exogenous features (Required by feedback)
     feat1 = np.cos(time) + np.random.normal(0, 0.02, n_steps)
     feat2 = np.sin(time * 0.2) + np.random.normal(0, 0.02, n_steps)
+    feat3 = np.random.normal(0, 1, n_steps) * 0.1 # Noise feature
+    feat4 = np.arctan(time * 0.01) + np.random.normal(0, 0.02, n_steps)
+    feat5 = (time % 10) / 10.0 # Sawtooth seasonality
     
-    df = pd.DataFrame({'target': target, 'feat1': feat1, 'feat2': feat2})
+    df = pd.DataFrame({
+        'target': target, 'feat1': feat1, 'feat2': feat2, 
+        'feat3': feat3, 'feat4': feat4, 'feat5': feat5
+    })
     df.to_csv('data/multivariate_data.csv', index=False)
-    print("Dataset created: data/multivariate_data.csv")
-
-if __name__ == "__main__":
-    generate_multivariate_series()
+    print("Dataset created with 5 features: data/multivariate_data.csv")
