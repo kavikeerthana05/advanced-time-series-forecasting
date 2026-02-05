@@ -3,63 +3,61 @@ Main execution file for training and evaluating time-series models.
 """
 
 import torch
-import optuna
 import numpy as np
 from torch.utils.data import DataLoader, random_split
 from data.dataset import TimeSeriesDataset
 from models.attention_seq2seq import AttentionSeq2Seq
+from models.lstm_baseline import LSTMBaseline
 from training.train import train_one_epoch, validate
 from evaluation.metrics import calculate_metrics
-from evaluation.explainability import explain_model_shap
+import os
 
+# Config
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+BATCH_SIZE = 64
+EPOCHS = 30
+SEQ_LEN = 50
 
-def objective(trial):
-    # Task 3: Automated Hyperparameter Search
-    lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
-    hidden_dim = trial.suggest_categorical("hidden_dim", [32, 64, 128])
-    seq_len = trial.suggest_int("seq_len", 30, 100)
-    
-    dataset = TimeSeriesDataset('data/multivariate_data.csv', seq_length=seq_len)
+def run_experiment(model_type='attention'):
+    dataset = TimeSeriesDataset('data/multivariate_data.csv', seq_length=SEQ_LEN)
     train_size = int(0.8 * len(dataset))
-    train_ds, val_ds = random_split(dataset, [train_size, len(dataset)-train_size])
+    test_size = len(dataset) - train_size
+    train_ds, test_ds = random_split(dataset, [train_size, test_size])
     
-    train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=32)
+    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE)
 
-    model = AttentionSeq2Seq(input_dim=3, hidden_dim=hidden_dim).to(DEVICE)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    if model_type == 'attention':
+        model = AttentionSeq2Seq(3, 64).to(DEVICE)
+    else:
+        model = LSTMBaseline(3, 64).to(DEVICE)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.MSELoss()
 
-    for epoch in range(10): # Shorter epochs for tuning
-        train_one_epoch(model, train_loader, optimizer, criterion, DEVICE)
-        val_loss = validate(model, val_loader, criterion, DEVICE)
-    
-    return val_loss
+    print(f"--- Training {model_type} ---")
+    for epoch in range(EPOCHS):
+        t_loss = train_one_epoch(model, train_loader, optimizer, criterion, DEVICE)
+        v_loss = validate(model, test_loader, criterion, DEVICE)
+        if epoch % 5 == 0:
+            print(f"Epoch {epoch} | Val Loss: {v_loss:.4f}")
 
-def run_final_training():
-    # 1. Hyperparameter Optimization
-    study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=10)
-    best_params = study.best_params
-    print(f"Optimized Parameters: {best_params}")
-
-    # 2. Final Train with Best Params
-    dataset = TimeSeriesDataset('data/multivariate_data.csv', seq_length=best_params['seq_len'])
-    train_loader = DataLoader(dataset, batch_size=32)
-    
-    model = AttentionSeq2Seq(3, best_params['hidden_dim']).to(DEVICE)
-    optimizer = torch.optim.Adam(model.parameters(), lr=best_params['lr'])
-    
-    # ... [Perform Full Training Loop here] ...
-
-    # 3. Standardized Evaluation (Task 4 & Rec 4)
+    # Final Eval
     model.eval()
-    # Logic to get y_true and y_pred...
-    # metrics = calculate_metrics(y_true, y_pred)
+    preds, actuals = [], []
+    with torch.no_grad():
+        for x, y in test_loader:
+            out, _ = model(x.to(DEVICE))
+            preds.extend(out.squeeze().cpu().numpy())
+            actuals.extend(y.numpy())
     
-    # 4. Explainability (Task 4)
-    explain_model_shap(model, train_loader, DEVICE)
+    metrics = calculate_metrics(np.array(actuals), np.array(preds))
+    print(f"Results for {model_type}: {metrics}")
 
 if __name__ == "__main__":
-    run_final_training()
+    if not os.path.exists('data/multivariate_data.csv'):
+        import data.generate_data as gd
+        gd.generate_multivariate_series()
+    
+    run_experiment('baseline')
+    run_experiment('attention')
