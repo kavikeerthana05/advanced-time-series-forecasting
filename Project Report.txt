@@ -1,0 +1,17 @@
+# Advanced Time Series Forecasting with Uncertainty Quantification
+
+Technical Project Report
+Project Overview and Architecture The project implements an advanced deep learning framework for multivariate time series forecasting. The core of the system is a Sequence-to-Sequence (Seq2Seq) architecture enhanced with a Multi-Head Self-Attention mechanism. Unlike standard models that provide single-point estimates, this implementation utilizes Quantile Regression to provide uncertainty quantification. By outputting the 10th, 50th, and 90th percentiles, the model offers a probabilistic view of future values, which is critical for risk assessment in complex datasets.
+
+Data Strategy and Feature Engineering The data generation process was expanded to include a target variable and five exogenous features (Trend, Sine, Noise, Arctan, and Sawtooth). This multivariate approach ensures the model captures complex, non-linear dependencies and diverse seasonal patterns. The preprocessing pipeline utilizes standard scaling and sliding window sequence creation to prepare the data for the LSTM-based encoder.
+
+Training and Optimization The training pipeline incorporates Quantile Loss to optimize the model for different percentiles. Hyperparameter tuning was managed through Optuna to find the most effective learning rates and hidden dimensions, ensuring the model avoids common pitfalls like hardcoded constraints or suboptimal convergence.
+
+Comprehensive Performance Analysis
+Forecast Accuracy and Scaling The model's performance was evaluated using Mean Absolute Scaled Error (MASE) to ensure accuracy relative to a naive seasonal baseline. A reported MASE below 1.0 indicates that the attention-based model significantly outperforms simple persistence or seasonal methods, effectively learning the underlying patterns of the multivariate series rather than just repeating previous cycles.
+
+Uncertainty and Probabilistic Reliability The Continuous Ranked Probability Score (CRPS) was used to evaluate the quality of the predicted quantiles. A low CRPS value confirms that the predicted 10th-to-90th percentile "ribbon" is tightly calibrated around the actual values. This demonstrates that the model is not only accurate in its median prediction (50th percentile) but also reliable in its estimation of potential variance and outliers.
+
+Comparison Against Baseline Models When compared to traditional statistical models like SARIMA, the Attention Seq2Seq model shows superior capability in capturing long-term dependencies. While SARIMA is effective for univariate trends, the deep learning model’s ability to integrate five exogenous features allows it to achieve a higher R-squared score and lower Root Mean Square Error (RMSE) across the forecasting horizon.
+
+Explainability and Attention Focus The inclusion of Integrated Gradients (via the Captum library) provides insight into feature importance. Analysis shows that the model correctly prioritizes features with clear seasonality, such as the sawtooth and sine patterns, over the noise-heavy variables. This interpretability validates that the Multi-Head Attention mechanism is successfully identifying relevant historical time steps to inform future predictions.
